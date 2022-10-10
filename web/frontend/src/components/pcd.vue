@@ -18,6 +18,7 @@ import { PointCloudObject, RectangularPrism } from '../gen/proto/api/common/v1/c
 import motionApi from '../gen/proto/api/service/motion/v1/motion_pb.esm';
 import commonApi from '../gen/proto/api/common/v1/common_pb.esm';
 import visionApi, { type TypedParameter } from '../gen/proto/api/service/vision/v1/vision_pb.esm';
+import { initXR } from '../lib/xr';
 import InfoButton from './info-button.vue';
 
 interface Props {
@@ -65,7 +66,10 @@ const renderer = new THREE.WebGLRenderer({
 });
 renderer.domElement.style.width = '100%';
 renderer.setClearColor('white');
+renderer.xr.enabled = true;
 const raycaster = new THREE.Raycaster();
+
+initXR(renderer);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -127,7 +131,7 @@ const animate = () => {
 
 const resizeRendererToDisplaySize = () => {
   const canvas = renderer.domElement;
-  const pixelRatio = window.devicePixelRatio;
+  const pixelRatio = 1 // window.devicePixelRatio;
   const width = Math.trunc(canvas.clientWidth * pixelRatio);
   const height = Math.trunc(canvas.clientHeight * pixelRatio);
   const needResize = canvas.width !== width || canvas.height !== height;
@@ -475,8 +479,6 @@ const update = (cloud: Uint8Array) => {
   mesh = new THREE.InstancedMesh(geometry, material, count);
   mesh.position.set(0.01, 0.01, 0.01);
   mesh.name = 'points';
-
-  console.log(positions.length, colors.length);
 
   for (let i = 0, j = 0; i < count; i += 1, j += 3) {
     matrix.setPosition(positions[j + 0], positions[j + 1], positions[j + 2]);
