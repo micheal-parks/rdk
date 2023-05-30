@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
 import { $ref } from 'vue/macros';
-import { threeInstance, MouseRaycaster, MeshDiscardMaterial, GridHelper } from 'trzy';
+import { threeInstance, MouseRaycaster, MeshDiscardMaterial, GridHelper, xr } from 'trzy';
 import { onMounted, onUnmounted, watch } from 'vue';
 import * as THREE from 'three';
 import { MapControls } from 'three/examples/jsm/controls/MapControls';
@@ -103,6 +103,8 @@ camera.userData.size = 1;
 setCamera(camera);
 scene.add(camera);
 
+const vr = xr(renderer, scene, camera);
+
 const baseMarker = makeMarker(BaseMarker, 'BaseMarker');
 const destMarker = makeMarker(DestMarker, 'DestinationMarker');
 destMarker.visible = false;
@@ -140,9 +142,9 @@ const dispose = (object?: THREE.Object3D) => {
 };
 
 const updatePose = (newPose: commonApi.Pose) => {
-  const x = newPose.getX();
-  const y = newPose.getY();
-  const z = newPose.getZ();
+  const x = newPose.getX() / 1000;
+  const y = newPose.getY() / 1000;
+  const z = newPose.getZ() / 1000;
 
   baseMarker.position.set(x, y, z);
 
@@ -289,9 +291,14 @@ const scaleObjects = () => {
   destMarker.scale.set(spriteSize, spriteSize, 1);
 };
 
-onMounted(() => {
+onMounted(async () => {
   removeUpdate = update(scaleObjects);
   container?.append(canvas);
+
+  const button = await vr.createButton();
+  container?.append(button);
+
+  console.log(container, button);
 
   scene.add(
     gridHelper,
