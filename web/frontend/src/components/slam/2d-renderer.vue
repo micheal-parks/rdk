@@ -294,8 +294,7 @@ const updatePointCloud = (pointcloud: Uint8Array) => {
 
 let removeUpdate: (() => void) | undefined;
 
-const scaleObjects = () => {
-  const { zoom } = camera;
+const scaleObjects = (zoom = camera.zoom) => {
 
   if (pointsMaterial) {
     pointsMaterial.size = zoom * cameraScale * window.devicePixelRatio;
@@ -313,6 +312,7 @@ const beforeEnterVrSession = () => {
   world.rotation.x = -Math.PI / 2;
   person.position.y = 1.8;
   setCamera(perspective);
+  scaleObjects(1);
 
   vr.showControllers();
   vr.enableTeleport([intersectionPlane]);
@@ -324,19 +324,20 @@ const beforeExitVrSession = () => {
   world.scale.setScalar(1);
   world.rotation.x = 0;
   setCamera(camera);
+  scaleObjects();
 };
 
 const startVrSession = async () => {
   try {
-    beforeEnterVrSession();
     await vr.requestSession();
+    beforeEnterVrSession();
   } catch (error) {
     toast.error(error);
   }
 };
 
 onMounted(async () => {
-  removeUpdate = update(scaleObjects);
+  removeUpdate = update(() => scaleObjects());
   container?.append(canvas);
 
   // const button = await vr.createButton();
