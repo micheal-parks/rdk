@@ -10,6 +10,7 @@ import type { commonApi } from '@viamrobotics/sdk';
 import DestMarker from '@/lib/images/destination-marker.txt?raw';
 import BaseMarker from '@/lib/images/base-marker.txt?raw';
 import Legend from './2d-legend.vue';
+import { toast } from '../../lib/toast';
 
 let points: THREE.Points | undefined;
 let pointsMaterial: THREE.PointsMaterial | undefined;
@@ -32,12 +33,16 @@ const axesHelperSize = 8;
 const textureLoader = new THREE.TextureLoader();
 
 const makeMarker = (png: string, name: string) => {
-  const material = new THREE.SpriteMaterial({
+  const geometry = new THREE.PlaneGeometry(1, 1, 1, 1);
+  const material = new THREE.MeshBasicMaterial({
     map: textureLoader.load(png),
-    sizeAttenuation: false,
     color: markerColor,
+    transparent: true,
   });
-  const marker = new THREE.Sprite(material);
+
+  material.map?.center.set(0.5, 0.5);
+
+  const marker = new THREE.Mesh(geometry, material);
   marker.name = name;
   marker.renderOrder = svgMarkerRenderOrder;
   return marker;
@@ -92,7 +97,11 @@ const { scene, renderer, canvas, start, stop, setCamera, update } = threeInstanc
   autostart: false,
 });
 
+const world = new THREE.Object3D();
+scene.add(world);
+
 renderer.setClearColor('white', 1);
+renderer.xr.enabled = true;
 
 canvas.style.cssText = 'width:100%;height:100%;';
 
@@ -103,12 +112,17 @@ camera.userData.size = 1;
 setCamera(camera);
 scene.add(camera);
 
-const vr = xr(renderer, scene, camera);
+const perspective = new THREE.PerspectiveCamera();
+const person = new THREE.Object3D();
+person.add(perspective);
+scene.add(person);
+
+const vr = xr(renderer, scene, perspective);
 
 const baseMarker = makeMarker(BaseMarker, 'BaseMarker');
 const destMarker = makeMarker(DestMarker, 'DestinationMarker');
 destMarker.visible = false;
-destMarker.center.set(0.5, 0.05);
+destMarker.material.map?.center.set(0.5, 0.05);
 
 let userControlling = false;
 
@@ -130,7 +144,7 @@ const dispose = (object?: THREE.Object3D) => {
     return;
   }
 
-  scene.remove(object);
+  object.parent?.remove(object);
 
   if (object instanceof THREE.Points || object instanceof THREE.Mesh) {
     object.geometry.dispose();
@@ -149,7 +163,7 @@ const updatePose = (newPose: commonApi.Pose) => {
   baseMarker.position.set(x, y, z);
 
   const theta = THREE.MathUtils.degToRad(newPose.getTheta() - 90);
-  baseMarker.material.rotation = theta;
+  baseMarker.rotation.z = theta;
 };
 
 /*
@@ -224,6 +238,7 @@ const updatePointCloud = (pointcloud: Uint8Array) => {
   pointsMaterial = points.material as THREE.PointsMaterial;
   pointsMaterial.sizeAttenuation = false;
   pointsMaterial.size = initialPointSize;
+  pointsMaterial.side = THREE.DoubleSide;
   points.geometry.computeBoundingSphere();
   points.renderOrder = pointsRenderOrder;
 
@@ -269,7 +284,7 @@ const updatePointCloud = (pointcloud: Uint8Array) => {
   }
 
   // add objects to scene
-  scene.add(
+  world.add(
     points,
     intersectionPlane
   );
@@ -291,16 +306,43 @@ const scaleObjects = () => {
   destMarker.scale.set(spriteSize, spriteSize, 1);
 };
 
+const beforeEnterVrSession = () => {
+  controls.enabled = false;
+  gridHelper.distance = 1000;
+  world.scale.setScalar(0.1);
+  world.rotation.x = -Math.PI / 2;
+  person.position.y = 1.8;
+  setCamera(perspective);
+
+  vr.showControllers();
+  vr.enableTeleport([intersectionPlane]);
+};
+
+const beforeExitVrSession = () => {
+  controls.enabled = true;
+  gridHelper.distance = 9000;
+  world.scale.setScalar(1);
+  world.rotation.x = 0;
+  setCamera(camera);
+};
+
+const startVrSession = async () => {
+  try {
+    beforeEnterVrSession();
+    await vr.requestSession();
+  } catch (error) {
+    toast.error(error);
+  }
+};
+
 onMounted(async () => {
   removeUpdate = update(scaleObjects);
   container?.append(canvas);
 
-  const button = await vr.createButton();
-  container?.append(button);
+  // const button = await vr.createButton();
+  // container?.append(button);
 
-  console.log(container, button);
-
-  scene.add(
+  world.add(
     gridHelper,
     axesPos,
     axesNeg,
@@ -371,5 +413,11 @@ watch(() => props.pointCloudUpdateCount, () => {
     <div class="absolute right-3 top-3">
       <Legend />
     </div>
+    <button
+      class="absolute bottom-0 right-0"
+      @click="startVrSession"
+    >
+      enter vr
+    </button>
   </div>
 </template>
